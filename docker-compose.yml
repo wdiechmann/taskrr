@@ -1,0 +1,106 @@
+# the version of docker compose we use
+version: '2'
+
+services:
+    proxy:
+        container_name: proxy
+        build: ./nginx
+        networks:
+        - web
+        links:
+        - elixir:elixir
+        ports:
+        - "80:80"
+        - "443:443"
+
+    # the first container will be called postgres
+    dbserver:
+        # # the image is the last official postgres image
+        # image: postgres
+        # # the volumes allow us to have a shared space between our computer and the docker vm
+        # volumes:
+        #     - "./.data/postgres:/var/lib/postgresql"
+        #  # set up instances env variable
+        # environment:
+        #     POSTGRES_USER: ${POSTGRESQL_ADDON_USER}
+        #     POSTGRES_PASSWORD: ${POSTGRESQL_ADDON_PASSWORD}
+        #     POOL: 100
+        # # the port to listen
+        # ports:
+        #     - "5432:5432"
+        # networks:
+        #     - db
+
+        container_name: mandarin_db
+        restart: always
+        build: ./mariadb
+        environment:
+            MYSQL_ROOT_PASSWORD: th!5!5!t
+            MYSQL_USER:     ${DB_USER}
+            MYSQL_PASSWORD: ${DB_PASSWORD}
+        ports:
+        - "3306:3306"
+        volumes:
+        - ./.data/mysql:/var/lib/mysql
+        networks:
+        - db
+
+    # the second container is called redis
+    redis:
+        # the image is the last official redis image of the version 4
+        image: redis:4.0
+        ports:
+            - "6379:6379"
+        volumes:
+            - ./.data/redis:/var/lib/redis
+        environment:
+            REDIS_PASSWORD: ${REDIS_PASSWORD}
+        networks:
+            - keyvalue
+
+    # our last container is called elixir
+    elixir:
+        # build use a path to a Dockerfile
+        build: .
+        # we set multiple ports as each of our application will use a different port
+        ports:
+            - "4001:4001"   # admin
+            - "4002:4002"   # api
+            - "4003:4003"   # aggregator
+            - "4004:4004"   # webhook
+            - "4005:4006"   # coral
+            - "4006:4006"   # jade
+            - "4101:4101"   # test admin
+            - "4102:4102"   # test api
+            - "4103:4103"   # test aggregator
+            - "4104:4104"   # test webhook
+            - "4105:4105"   # test coral
+            - "4106:4106"   # test jade
+        # command: iex -S mix phx.server
+        environment:
+            MIX_ENV: "dev"
+            HOST: "localhost"
+            MANDARIN_TYPE: "ruby"
+            MANDARIN_MONITOR: "ruby:4001"
+            SECRET_KEY_BASE: "ghjkrtyuixcvbnfghjk"
+            DB_HOST: "dbserver"
+            DB_NAME: "taskrr_dev"
+            DB_USER: "taskrr"
+            DB_PASSWORD: "pASSword"
+
+        # we share the entire app with the container, but the libs
+        volumes:
+            - ".:/app"
+            - "/app/deps"
+            - "/app/apps/admin/assets/node_modules"
+        # the container will not start if the postgres container isn't running
+        depends_on:
+            - dbserver
+        networks:
+            - db
+            - keyvalue
+            - web
+networks:
+    web:
+    db:
+    keyvalue:
